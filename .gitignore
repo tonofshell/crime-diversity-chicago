@@ -1,0 +1,9 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+final_viz_files
+modeling_files
+modeling.html
+final_viz.html
+api_keys.R

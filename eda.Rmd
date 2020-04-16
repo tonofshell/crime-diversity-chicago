@@ -1,0 +1,118 @@
+---
+title: "EDA"
+author: "Adam Shelton"
+date: "3/12/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(ggmap)
+library(sf)
+library(cowpoke)
+library(beachball)
+library(ggcorrplot)
+library(skimr)
+library(knitr)
+library(kableExtra)
+library(FactoMineR)
+library(factoextra)
+library(here)
+
+knitr::opts_chunk$set(echo = TRUE, dpi = 300, cache = FALSE, message = FALSE, warning = FALSE)
+```
+
+```{r cpd-data}
+cpd_crime_data = readRDS(here("Data", "cpd_crime_data_2018.rds"))
+```
+
+```{r chi-map, fig.height=8, fig.width=6}
+chi_map = ggmap(get_stamenmap(c(left = -88, bottom = 41.6, right = -87.5, top = 42.1), maptype = "toner-background", zoom = 11)) + scale_x_continuous(limits = c(-88, -87.5), expand = c(0, 0)) + scale_y_continuous(limits = c(41.6, 42.1), expand = c(0, 0))
+
+chi_map + geom_point(data = cpd_crime_data, aes(x = longitude, y = latitude), color = "blue", alpha = 0.6) + theme_map()
+```
+
+```{r census-data, fig.height=8, fig.width=6}
+census_tract_data = readRDS(here("Data", "acs_tracts_2018_prop.rds")) %>% st_as_sf() %>% st_transform(4326)
+
+#+ coord_sf(xlim = c(-88, -87.5), ylim = c(41.6, 42.1))
+chi_map + geom_sf(data = census_tract_data, aes(geometry = geometry, fill = factor(GEOID)), inherit.aes = FALSE, alpha = 0.7, color = NA)  + theme_map() + hide_legend
+```
+
+```{r merged-data}
+merged_data = read_rds(here("Data", "merged_data_final.rds")) %>% st_as_sf() %>% st_transform(4326)
+```
+
+```{r crime-map, fig.height=8, fig.width=10}
+tract_crime_data = merged_data %>% select(arrests, domestic, aggravated, attempted, armed, geometry) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_crime_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map() + hide_legend
+```
+
+```{r demo-map, fig.height=10, fig.width=8}
+tract_demo_data = merged_data %>% select(pop_female, pop_asian, pop_black, pop_hispanic, pop_native_amer, pop_white, pop_under_18, pop_native_born, pop_foreign_born, geometry) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_demo_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map() + hide_legend
+```
+
+```{r work-map, fig.height=8, fig.width=10}
+tract_demo_data = merged_data %>% select(contains(c("work", "employ"))) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_demo_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map() + hide_legend
+```
+
+
+```{r housing-map, fig.height=8, fig.width=10}
+tract_demo_data = merged_data %>% select(pop_occupied, pop_owned, pop_rented) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_demo_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map() + hide_legend
+```
+
+```{r educ-map, fig.height=10, fig.width=8}
+tract_demo_data = merged_data %>% select(contains(c("educ"))) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_demo_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map() + hide_legend
+```
+
+```{r ses-map, fig.height=8, fig.width=10}
+tract_demo_data = merged_data %>% select(pop_below_poverty, pop_employed) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_demo_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map() + hide_legend
+```
+
+```{r div-index, fig.height=8, fig.width=6}
+chi_map + geom_sf(data = merged_data, aes(geometry = geometry, fill = diversity_index), inherit.aes = FALSE, alpha = 0.7, color = NA) + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map() + hide_legend
+```
+
+```{r pop-density, fig.height=8, fig.width=6}
+chi_map + geom_sf(data = mutate_at(merged_data, vars(-geometry), as.numeric), aes(geometry = geometry, fill = log(pop_density)), inherit.aes = FALSE, alpha = 0.7, color = NA) + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map()
+```
+
+```{r fam-density, fig.height=8, fig.width=6}
+chi_map + geom_sf(data = mutate_at(merged_data, vars(-geometry), as.numeric), aes(geometry = geometry, fill = log(family_density)), inherit.aes = FALSE, alpha = 0.7, color = NA) + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map()
+```
+
+```{r crime-density, fig.height=8, fig.width=6}
+chi_map + geom_sf(data = merged_data, aes(geometry = geometry, fill = crime_density), inherit.aes = FALSE, alpha = 0.7, color = NA) + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map()
+```
+
+```{r descr-stats}
+cor_data = merged_data %>% st_drop_geometry() %>% select_if(is.numeric) %>% select(sort(current_vars())) %>% mutate_all(as.numeric) %>% mutate_all(fix_nas, na_strs = "Inf")
+data_stats = cor_data %>% skim() %>% partition()
+
+data_stats$numeric %>% mutate_if(is.numeric, round, digits = 3) %>% kable() %>% kable_styling(bootstrap_options = c("striped", "responsive", "condensed"))
+
+```
+
+
+```{r corrs, fig.width=13, fig.height=13}
+cor_matrix = cor_data %>% cor(use = "pairwise.complete.obs") %>% round(1)
+prob_mat = cor_data %>% cor_pmat(use = "pairwise")
+
+ggcorrplot(cor_matrix, p.mat = prob_mat, hc.order = TRUE, insig = "pch", pch.col = "grey", lab = FALSE) + theme_day() + theme(axis.text.x = element_text(angle = 25, hjust = 1))
+```
+
+```{r pca, fig.height=10, fig.width=10}
+pca_mod = cor_data %>% scale() %>% PCA(graph = FALSE)
+
+fviz_pca_var(pca_mod, repel = TRUE)
+fviz_pca_var(pca_mod, repel = TRUE, axes = c(2,3))
+fviz_pca_var(pca_mod, repel = TRUE, axes = c(3,4))
+```
+

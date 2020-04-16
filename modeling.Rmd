@@ -1,0 +1,140 @@
+---
+title: "Modeling"
+author: "Adam Shelton"
+date: "3/17/2020"
+output: 
+  html_document:
+    self_contained: FALSE
+---
+
+```{r setup, include=FALSE}
+library(memisc)
+library(tidyverse)
+library(here)
+library(knitr)
+library(kableExtra)
+library(ggcorrplot)
+library(ggrepel)
+library(skimr)
+library(treemapify)
+library(xtable)
+library(FactoMineR)
+library(factoextra)
+library(beachball)
+
+library(extrafont)
+windowsFonts(`Pragati Narrow` = windowsFont("Pragati Narrow"))
+
+set.seed(60615)
+
+knitr::opts_chunk$set(echo = TRUE, fig.height = 7.5, fig.width = 9, dpi = 300)
+
+set.seed(60615)
+
+sign_format = function(x, breaks = c(1, 0.1, 0.05, 0.01, 0.001, 0), values = c("grey", "orange", "yellowgreen", "green", "darkgreen"), na_value = "grey") {
+  x = ifelse(is.na(x), na_value, x)
+  for (i in 1:(length(breaks) - 2)) {
+    x = ifelse(x <= breaks[i] & x > breaks[i + 1], values[i], x)
+  }
+  last_index = length(breaks)
+  x = ifelse(x <= breaks[last_index - 1] & x >= breaks[last_index], values[last_index - 1], x)
+  x
+}
+
+pos_neg_format = function(x, values = c("black", "grey35", "black")) {
+  std_x = (x / (2 * max(abs(x)))) + 0.5
+  colors = colorRamp(values)(std_x) %>% (function(x) x / 255) %>% {rgb(.[,1], .[,2], .[,3])}
+  colors
+}
+
+anova_table = function(models = list()) {
+    out_table = models[[1]] %>% as_tibble(rownames = "Variable")
+    for (i in 2:length(models)) {
+        out_table = rbind(out_table, models[[i]] %>% as_tibble(rownames = "Variable") %>% 
+            na.omit())
+    }
+    out_table
+}
+
+lm_table = function(lm_obj, table_caption = NULL) {
+  if (is.null(table_caption)) {
+   table_caption = paste(deparse(substitute(lm_obj)), "results")
+  }
+  
+  lm_obj %>% summary() %>% .$coefficients %>% as_tibble(rownames = "Variable") %>% mutate_if(is.numeric, 
+    round, digits = 3) %>% mutate(`Pr(>|t|)` = cell_spec(`Pr(>|t|)`, "html", color = "white", 
+    background = sign_format(`Pr(>|t|)`), bold = TRUE), Estimate = cell_spec(Estimate, 
+    "html", background = ifelse(Estimate < 0, "turquoise", "tomato"), color = pos_neg_format(Estimate), 
+    bold = TRUE)) %>% kable(format = "html", escape = F, caption = table_caption) %>% 
+    kable_styling("striped", full_width = F)
+}
+```
+
+## Data
+```{r data}
+analysis_data = read_rds(here("Data", "merged_data_final.rds")) %>% mutate(pop_attend_col = pop_educ_some_col + pop_educ_mt_ba) %>% select(GEOID, crime_density, diversity_index, pop_white, pop_black, pop_asian, pop_hispanic, pop_density, pop_female, pop_attend_col, pop_foreign_born, pop_below_poverty, pop_employed, pop_rented) %>% na.omit()
+
+cor_data = analysis_data %>% select(-GEOID) %>% mutate_all(as.numeric)
+cor_matrix = cor_data %>% cor(use = "pairwise.complete.obs") %>% round(1)
+prob_mat = cor_data %>% cor_pmat(use = "pairwise")
+
+ggcorrplot(cor_matrix, p.mat = prob_mat, hc.order = TRUE, insig = "pch", pch.col = "black", lab = TRUE, colors = color_pal(3, "segmented", reverse = TRUE), ggtheme = theme_day(base_family = "Pragati Narrow", base_size = 18)) + theme_day(base_family = "Pragati Narrow", base_size = 18) + theme(axis.text.x = element_text(angle = 25, hjust = 1), axis.title = element_blank())
+```
+
+## Base Model
+```{r base-mod}
+base_mod = lm(crime_density ~ diversity_index + log(pop_density) + pop_female, data = analysis_data)
+
+lm_table(base_mod)
+```
+
+## Adding Race/Ethnicity
+```{r race-mod}
+race_mod = lm(crime_density ~ diversity_index + log(pop_density) + pop_female + pop_white + pop_black + pop_asian + pop_hispanic, data = analysis_data)
+
+lm_table(race_mod)
+```
+
+## Adding Nationality
+```{r nat-mod}
+nat_mod = lm(crime_density ~ diversity_index + log(pop_density) + pop_female + pop_white + pop_black + pop_asian + pop_hispanic + pop_foreign_born, data = analysis_data)
+
+lm_table(nat_mod)
+```
+
+## Adding Economic Factors
+```{r econ-mod}
+econ_mod = lm(crime_density ~ diversity_index + log(pop_density) + pop_female + pop_white + pop_black + pop_asian + pop_hispanic + pop_foreign_born + pop_attend_col + pop_below_poverty + pop_employed + pop_rented, data = analysis_data)
+
+lm_table(econ_mod)
+```
+
+## Model Comparisons
+### Coeffiecients
+```{r comparison}
+comparison_table = mtable("Demographics" = base_mod, "Race" = race_mod, "Nationality" = nat_mod, "Economic Factors" = econ_mod) 
+write.mtable(comparison_table, file = here("comparison_table.csv"), colsep = ",")
+comparison_table %>% format_html() %>% asis_output()
+```
+
+### ANOVA
+```{r anova}
+anova_results = anova_table(list(anova(base_mod, race_mod), anova(race_mod, nat_mod), anova(nat_mod, econ_mod))) %>% 
+    mutate_if(is.numeric, round, digits = 3) 
+saveRDS(anova_results, here("anova_results.rds"))
+
+anova_results %>% mutate(`Pr(>Chisq)` = cell_spec(`Pr(>F)`, 
+    "html", color = "white", background = sign_format(`Pr(>F)`))) %>% kable(format = "html", 
+    escape = F, caption = "ANOVA Model Comparison") %>% kable_styling("striped", 
+    full_width = F)
+```
+
+## PCA
+
+```{r pca, fig.height=6, fig.width=6}
+pca_mod = cor_data %>% scale() %>% PCA(graph = FALSE)
+
+fviz_pca_var(pca_mod, repel = TRUE) + theme_day(base_family = "Pragati Narrow", base_size = 18) + labs(title = NULL)
+fviz_pca_var(pca_mod, repel = TRUE, axes = c(2,3))
+fviz_pca_var(pca_mod, repel = TRUE, axes = c(3,4))
+```

@@ -1,0 +1,163 @@
+---
+title: "Crime and Diversity in Chicago"
+author: "Adam Shelton"
+date: "March 2020"
+header-includes:
+  - \usepackage{pmboxdraw}
+  - \usepackage{setspace}\doublespacing
+  - \setlength\parindent{24pt}
+  - \usepackage{tabularx, dcolumn}
+output: 
+  bookdown::pdf_book:
+    fig_caption: TRUE
+bibliography: sources.bib
+#nocite: '@*' 
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(kableExtra)
+library(skimr)
+library(here)
+
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+
+crime_data = readRDS(here("Data", "cpd_crime_data_2018.rds"))
+census_data = readRDS(here("Data", "acs_tracts_2018_prop.rds"))
+merged_data = readRDS(here("Data", "merged_data_final.rds"))
+analysis_data = merged_data %>% mutate(pop_attend_col = pop_educ_some_col + pop_educ_mt_ba) %>% select(GEOID, crime_density, diversity_index, pop_white, pop_black, pop_asian, pop_hispanic, pop_density, pop_female, pop_attend_col, pop_foreign_born, pop_below_poverty, pop_employed, pop_rented) %>% na.omit()
+
+insert_number = function(x) {
+  rounder = function(z) {
+    if (z < 1) {
+      return(round(z, 3))
+    }
+    if (z < 10) {
+      return(round(z, 2))
+    }
+    if (z < 100) {
+      return(round(z, 1))
+    }
+    round(z, 0) %>% formatC(format = "d", big.mark = ",")
+  }
+  sapply(x, rounder) 
+}
+
+```
+
+\newpage
+# Introduction
+Diversity, as far as race, ethnicity, or gender, is typically celebrated in liberal democracies. Schools, workplaces, and communities in these countries all tout the variety of backgrounds their members have. Diversity is seen as a way to increase innovation and productivity, by fostering new ideas from a pool of people who all have different life experiences. However, are diverse communities the utopia that many claim they are?
+
+There is some evidence for the contrary. In the race for tolerance and diversity, while people of some backgrounds are being elevated, others feel that they being left behind [@Stolzenberg1993; @Miller2016]. @Walzer1997 claims that among this rampant multiculturalism and tolerance, many have lost their sense of community and unification. Numerous Sociologists have suggested social disorganization as a factor behind the persistence of crime in areas [@Shaw1942; @Laub1993]. 
+
+In diverse communities, there is the potential that ties between people will be weaker, as there is not a single culture that everyone has in common. Differences and misunderstandings between people of different cultures could erode trust and and promote disorder among different groups in the community. All of this could lead to increased crime. Therefore, this paper aims to investigate the relationship between crime and diversity in Chicago, to identify whether racial/ethnic diversity is a contributing factor to crime or if other underlying factors are responsible.
+
+# Background
+
+## Social Disorganization Theory
+
+Broadly, social disorganization theory, identifies that neighborhood characteristics associated with disorder as being instrumental in perpetuating criminal activity. @Shaw1942 discovered that areas appeared to maintain their high density of crimes even after the demographics of the area changed. They argued that the high amount of turnover in these areas of lower socioeconomic status, created "social disorganization", where typical social institutions were unable to exert social control. As such, criminality became the unifying force in these neighborhoods, passed down from one generation to the next. 
+
+@Sampson1989 empirically tests the theories proposed in @Shaw1942 using crime data from the British Crime Survey. According to their analysis of this survey data, factors such as residential stability, socioeconomic status, and ethnic heterogeneity all had a significant effect on different measures of social disorganization. However in the case of SES, the relationship was not always positive, indicating that in some cases, it had the opposite effect as proposed by @Shaw1942. In the case of muggings and street robberies, ethnic heterogeneity, family disruption, and unsupervised peer groups all occurred in higher rates where more crimes were reported. There were lower observed rates of local friendship groups and organizational participation, providing empirical evidence that supported social disorganization theory. Similar results were also observed for reported burglaries, auto thefts, and vandalism. 
+
+@Laub1993 qualitatively found that men who gained social ties and organization, for example through getting married and starting a family, tended to engage in less criminality. However, those with a sudden increase in disorganization early in their adult lives, like a man who lost a job as a young adult, often exhibited deviant behaviors for the rest of their lives. These men, while helped briefly by marriage and finding a new job, ultimately could not conform. 
+
+Modern works offer more nuanced explanations for social disorganization theory. Crime not only constricts neighborhood resources, it also leads to isolation, as people remain in their homes to avoid crime [@Kubrin2003]. Perpetuated crime can also result from a power vacuum, where a lack of policing creates the need for the need for others to enforce rules, which allows criminal organizations to fill that void [@Kubrin2003]. Furthermore, if police are not seen as protectors of the community, citizens will be less likely to report crimes or otherwise intervene, if they feel there will be no one else to assist in law enforcement [@Kubrin2003]. In contrast, over-policing can disrupt family structures, replacing familiar ties with criminal social ties, as people spend more of their life in prison than with their family [@Kubrin2003].  
+
+## Critiques
+
+However, contemporary studies on crime critique social disorganization theory as an oversimplification. People in high crime areas want crime to decrease, even if they may feel powerless against it [@Kubrin2003]. The strength of the relationship with social disorganization can also vary on the type of crime being studied [@Kubrin2003]. Also, crime and the forces behind it are not geospatially independent, as the characteristics of one area are affected by the characteristics of the areas that surround it [@Kubrin2003].
+
+While social disorganization theories from @Sampson1989 and @Bursik2001 propose that immigration is associated with high population turnover resulting in crime, more recent studies have disagreed with this conclusion. Diversity is empirically difficult to measure, resulting in other better-measured factors to have stronger effects [@Hojman2004]. In a study of hate crimes, relationships with race and education were both found to be significant, perhaps indicating that if diversity does result in certain types of crimes, socioeconomic factors still play a part [@Espiritu2004].
+
+In @Hooghe2011 unemployment is a more important factor in explaining crime in Belgium than immigration, while @Churchill2019 in a study spanning 78 countries, found that higher levels of diversity actually correlate with a reduction in crime rates. Similarly, @Martinez2010 in a longitudinal analysis of homicides in San Diego, discovered that higher proportions of immigrants accompanied a reduction in homicides. These contradictions in the literature necessitate further study of the relationship behind diversity, race, nationality, and economic factors.
+
+# Data
+
+This project utilizes data from two sources, the City of Chicago and the United States Census. The Chicago Police Department publishes data on all reported crimes in the district, of which all `r insert_number(nrow(crime_data))` reported crimes from 2018 were retrieved from the City's data portal using their Socrata API. Data for all `r insert_number(nrow(census_data))` tracts in Cook County from the 2018 American Community Five Year Survey was also retrieved using the US Census API. These two data-sets were merged using the `sf` package in R to calculate the number of crimes per 1000 people in each of the `r insert_number(nrow(merged_data))` census tracts in Chicago containing residents for the year of 2018. Any tracts without residents were omitted, as they had missing values for most of the variables. The variables for college attendance, population density, and diversity index were engineered from variables in this merged data-set, but all other variables already existed. 
+
+```{r variable-descr, echo=FALSE}
+descr_table = tibble("Name" = c("GEOID", "crime_density", "diversity_index", "pop_white", "pop_black", "pop_asian", "pop_hispanic", "pop_density", "pop_female", "pop_attend_col", "pop_foreign_born", "pop_below_poverty", "pop_employed", "pop_rented"), 
+       "Group" = c("1_id", "2_dep_var", "3_intr_var", "4_demo",  "4_demo",  "4_demo", "4_demo",  "4_demo", "4_demo", "5_econ", "4_demo", "5_econ", "5_econ", "5_econ"),
+       "Use" = c("ID", "Dependent Variable", "Covariate of Interest", "Demographic Covariate", "Demographic Covariate", "Demographic Covariate", "Demographic Covariate", "Demographic Covariate", "Demographic Covariate", "Economic Covariate", "Demographic Covariate", "Economic Covariate", "Economic Covariate", "Economic Covariate"), 
+       "Description" = c("Census Tract ID", "Crimes per 1000 people", "Racial/Ethnic Diversity Index, 0 is completely homogeneous", "Proportion identified as White", "Proportion Identified as Black", "Proportion identified as Asian", "Proportion identified as Hispanic/Latinx", "People per square mile", "Proportion identified as female", "Proportion that attended college", "Proportion born outside the US", "Proportion below poverty line", "Proportion employed", "Proportion renting housing")) %>% arrange(Group, Name) %>% select(-Group) 
+
+descr_table %>% kable(caption = "Variable Descriptions")
+```
+
+```{r descr-stats}
+descr_stats = analysis_data %>% mutate_all(as.numeric) %>% select(-GEOID) %>% skim() %>% partition() %>% .$numeric %>% left_join(tibble("skim_variable" = c("GEOID", "crime_density", "diversity_index", "pop_white", "pop_black", "pop_asian", "pop_hispanic", "pop_density", "pop_female", "pop_attend_col", "pop_foreign_born", "pop_below_poverty", "pop_employed", "pop_rented"), 
+       "Group" = c("1_id", "2_dep_var", "3_intr_var", "4_demo",  "4_demo",  "4_demo", "4_demo",  "4_demo", "4_demo", "5_econ", "4_demo", "5_econ", "5_econ", "5_econ"))) %>% arrange(Group, skim_variable) %>% select(-Group, -complete_rate, -n_missing) %>% rename("Variable" = skim_variable, "Mean" = mean, "Std. Dev." = sd, "0 Pctl." = p0, "25 Pctl." = p25, "50 Pctl." = p50, "75 Pctl." = p75, "100 Pctl." = p100, "Histogram" = hist) %>% mutate_if(is.numeric, insert_number) 
+
+descr_stats %>% kable(caption = "Descriptive Statistics", booktabs = TRUE)
+```
+
+Chicago, while predominately white is overall more diverse than the country as a whole. However, despite the city's high amount of segregation, as shown by the strong negative correlations between races/ethnicities in Figure \@ref(fig:cor-mat), there is a rather uniform distribution of diversity indices. Diversity is not spread uniformly across the city geospatially, though. There is a strong racial component, as areas with higher proportions of black people are associated with lower diversity indices (Figures \@ref(fig:cor-mat), \@ref(fig:combined), \@ref(fig:demo-vars)). Education is also associated with lower levels of diversity (Figure \@ref(fig:cor-mat)). Diverse areas are more likely to be better off economically, and have less crime overall (Figure \@ref(fig:cor-mat)). 
+
+```{r cor-mat, out.width="100%", fig.cap="Correlation Matrix"}
+knitr::include_graphics("modeling_files/figure-html/data-1.png")
+```
+
+```{r combined, out.width="100%", fig.cap="Crime and Population Density; Diversity Index"}
+knitr::include_graphics("final_viz_files/figure-html/combined-1.png")
+```
+
+```{r demo-vars, out.width="100%", fig.cap="Demographic Variables"}
+knitr::include_graphics("final_viz_files/figure-html/demo-map-1.png")
+```
+
+```{r econ-vars, out.width="100%", fig.cap="Economic Variables"}
+knitr::include_graphics("final_viz_files/figure-html/work-map-1.png")
+```
+
+# Methods
+
+All of the analyses were conducted in R 3.6.3. Population density was log transformed to reduce the right skew in the distribution. Other variables, including crime density, also exhibited some skewdness, but these variables were not transformed to aid in ease of interpretation. Four linear models were made using the `lm()` function from the built-in `stats` package in R. The first included only the diversity index, log transformed population density, and proportion female, with race/ethnicity variables added to the second model. In the third model just nationality was added, with all the economic measures added in the last model. An ANOVA was run using the `anova()` function from the built-in `stats` package to compare each model to the previous one in the nested model structure. A Principal Components Analysis was conducted using the `PCA()` function in the `FactoMineR`, with visualizations generated using the `factoextra` package, to further assess the groupings of these measures.
+
+# Results
+
+## Linear Regression
+For the regression model (Table \@ref(tab:ols-results)), The relationship between crime density and diversity is negative, but greatest and only significant in the first model with few other demographic covariates. Interestingly proportion of females is not significant in the first model, but becomes significant after introducing covariates for race. Some aspects of race are significant until economic covariates are introduced. Nationality is highly significant in both models it was included in, while the only significant economic factor was proportion of rented units, not employment or poverty. According to the ANOVA (Table \@ref(tab:anova-res)), each model in the nested model structure was a significantly better model than the one that preceded it.  
+
+```{r anova-res}
+anova_results = readRDS(here("anova_results.rds"))
+options(knitr.kable.NA = '')
+anova_results %>% mutate(Variable = c("Demographics", "Race", "Nationality", "Economic")) %>% rename("Model" = Variable) %>% kable(caption = "ANOVA Results")
+```
+
+```{r ols-results}
+options(knitr.kable.NA = '')
+read_csv(here("comparison_table.csv")) %>% rename(" " = X1) %>% kable(caption = "Regression Results")
+```
+
+## Principal Components Analysis
+For the first two principal components (Figure \@ref(fig:pca)), there appears to be three main clusters of variables, one along the negative axis of Dimension 1, and two approximately perpendicular to each other, split along the positive side of the Dimension 1 axis. If we rotate this, it makes sense that we might get an economic axis and an immigrant axis. This would put proportions of White, college attendance, and employment with a strong positive relationship to the economic dimension, while poverty, crime, renting, and being Black or female are all associated with the negative side. Proportion Hispanic, immigrant, and the diversity index are all have a strong positive relationship along the immigrant dimension. This would mean that crime density, being Black or female, and attending college are all have a slight negative relationship with the immigrant dimension, while proportion White and Asian are slightly positive.
+
+```{r pca, out.width="100%", fig.cap="Principal Components Biplot"}
+knitr::include_graphics("modeling_files/figure-html/pca-1.png")
+```
+
+# Discussion 
+
+While the diversity index was not significant in our models, the variables that are significant provide a much simpler story on crime in Chicago. Higher population density, as well as greater proportions of women and immigrants lead to drastic drops in crime reported crimes, while proportions of renters leads to a significant increase in crime reports. The interpretation of these results depends on one's belief in the accuracy of crime reports as a reflection of actual crimes.
+
+Assuming that all crimes, regardless of their location, are equally likely to be reported, then areas with women and immigrants have lower amounts of crime, while areas with renters have higher amounts of crime. Women and immigrants are typically less likely to commit crimes. Immigrants are especially less likely to engage in criminal activity, as it could jeopardize their life in the country. Population density could lead to lower crime rates because of the increased opportunities for someone to observe a crime occurring, and therefore the higher risk for criminals. Renters, who in urban areas, are more likely to live in close quarters to many more people, could simply have more opportunities to come in conflict with people they do not know, in addition to having a lower socioeconomic status.
+
+In the case that this a measure of over or under-reporting, this interpretation changes slightly. Women and immigrants could report crimes less often, perhaps because they are more vulnerable populations when it comes to interacting with police or from potentially experiencing backlash from reporting criminal activity. In a similar vein, renters, are in closer proximity to others. This perhaps increases the chances of crimes being noticed and reported much quicker, resulting to more reports of crimes in areas with higher population density or more renters. People who rent being from a lower socioeconomic status, may also have less resources to use for protecting themselves and their property, while also being more likely to commit a crime to obtain resources they need, creating more need and more opportunities for crimes to occur. However, a greater population density overall could also afford criminals more anonymity, as people are less likely to remember the greater number of people they interact with each day, or notice suspicious activity.
+
+# Conclusion
+
+While there is some complexity in interpreting reports of crimes, assuming reports accurately measure crimes in all communities, these results appear to be quite similar to those found in @Churchill2019 and @Martinez2010. While diversity does appear to be associated with lower numbers of crime reports, other factors such as the population density, and proportion of immigrants, females, or rental units are the significant factors in predicting reported crime density.
+
+However, this does not necessarily disprove social disorganization theory. Immigrants by necessity must have strong social institutions and capital, not only to relocate to a new country but to find housing, jobs, and friends. Similarly an increased presence of women could encourage heterosexual monogamous relationships, reinforcing the social structures of families and decreasing crime. A greater population density means for greater opportunities to find a community to belong to in a smaller radius. In contrast, the higher turnover of rented housing units than those that are owned, could discourage community growth.
+
+Despite these compelling results, more research is necessary to better understand if social disorganization is responsible for these relationships. Certainly one improvement would be some measure of the characteristics of surrounding communities as suggested by @Kubrin2003. A robust causal analysis would also be a great improvement over a simple least squares regression model. If we consider diversity to be a "treatment" we could use a regression discontinuity design to test if a certain level of diversity is a cutoff for an change in crime reports. 
+
+Similarly, leveraging data from several years could allow for a longitudinal study of the relationship of diversity and crime. With longitudinal data, a difference in difference analysis could be conducted to test if changes in diversity over time accompany changes in the reported crimes of that area. A comprehensive factor analysis could also better identify variables to be included in a measure of diversity or social disorganization from Census data. 
+
+Regardless, this study does give a better understanding of how policy might be improved to abet lawfulness. If urbanization and immigration do not raise crime rates like many policy-makers claim, then police resources are perhaps not being expended in the right areas, exacerbating issues with criminal activity in other areas. It is clear from this study that careful consideration must be given to where and how police patrol and interact with citizens. 
+
+\newpage
+\singlespacing
+# Works Cited

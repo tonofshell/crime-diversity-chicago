@@ -1,0 +1,81 @@
+---
+title: "Final Paper Visualizations"
+author: "Adam Shelton"
+date: "3/19/2020"
+output: 
+  html_document:
+    self_contained: FALSE
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(ggmap)
+library(sf)
+library(cowpoke)
+library(ggcorrplot)
+library(skimr)
+library(knitr)
+library(kableExtra)
+library(FactoMineR)
+library(factoextra)
+library(scales)
+library(cowplot)
+library(beachball)
+library(here)
+
+library(extrafont)
+windowsFonts(`Pragati Narrow` = windowsFont("Pragati Narrow"))
+
+knitr::opts_chunk$set(echo = TRUE, dpi = 300, cache = FALSE, message = FALSE, warning = FALSE)
+```
+
+## Data
+```{r chi-map, fig.height=8, fig.width=6}
+chi_map = ggmap(get_stamenmap(c(left = -88, bottom = 41.6, right = -87.5, top = 42.1), maptype = "toner-background", zoom = 11)) + scale_x_continuous(limits = c(-88, -87.5), expand = c(0, 0)) + scale_y_continuous(limits = c(41.6, 42.1), expand = c(0, 0))
+```
+
+```{r merged-data}
+merged_data = readRDS(here("Data", "merged_data_final.rds")) %>% mutate(pop_attend_col = pop_educ_some_col + pop_educ_mt_ba) %>% select(GEOID, crime_density, diversity_index, pop_white, pop_black, pop_asian, pop_hispanic, pop_density, pop_female, pop_attend_col, pop_foreign_born, pop_below_poverty, pop_employed, pop_rented, geometry) %>% na.omit()
+```
+
+## Crime Density
+```{r crime-density, fig.height=8, fig.width=6}
+crim_den_map = chi_map + geom_sf(data = merged_data %>% st_as_sf() %>% st_transform(4326), aes(geometry = geometry, fill = crime_density), inherit.aes = FALSE, alpha = 0.7, color = NA) + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map(base_family = "Pragati Narrow", base_size = 18) + labs(fill = "Crimes per \n1000 People")
+
+crim_den_map
+```
+
+## Population Density
+```{r pop-density, fig.height=8, fig.width=6}
+pop_den_map = chi_map + geom_sf(data = mutate_at(merged_data, vars(-geometry), as.numeric) %>% st_as_sf() %>% st_transform(4326), aes(geometry = geometry, fill = log(pop_density)), inherit.aes = FALSE, alpha = 0.7, color = NA) + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map(base_family = "Pragati Narrow", base_size = 18) + labs(fill = "People per Sq. Mi.\n(Log Transformed)")
+
+pop_den_map
+```
+
+## Diversity Index
+```{r div-index, fig.height=8, fig.width=6}
+div_ind_map = chi_map + geom_sf(data = merged_data %>% st_as_sf() %>% st_transform(4326), aes(geometry = geometry, fill = diversity_index), inherit.aes = FALSE, alpha = 0.7, color = NA) + scale_fill_gradientn(colors = color_pal(5, "continuous")) + theme_map(base_family = "Pragati Narrow", base_size = 18) + labs(fill = "Tract Racial /\nEthnic Diversity")
+
+div_ind_map
+```
+
+## Indices
+
+```{r combined, fig.width=15, fig.height=9}
+plot_grid(crim_den_map, pop_den_map, div_ind_map, nrow = 1)
+```
+
+
+## Demographics
+```{r demo-map, fig.height=10, fig.width=8}
+tract_demo_data = merged_data %>% select(pop_female, pop_asian, pop_black, pop_hispanic, pop_white, pop_foreign_born, geometry) %>% rename("Female" = pop_female, "Asian" = pop_asian, "Black" = pop_black, "White" = pop_white, "Foreign Born" = pop_foreign_born, "Hispanic" = pop_hispanic) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_demo_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous"), labels = percent) + theme_map(base_family = "Pragati Narrow", base_size = 18) + labs(fill = "Percent of Tract\nPopulation")
+```
+
+## Economic Factors
+```{r work-map, fig.height=10, fig.width=8}
+tract_demo_data = merged_data %>% select(contains(c("attend", "poverty", "employ", "geometry", "rent"))) %>% rename("Attended College" = pop_attend_col, "Below Poverty" = pop_below_poverty, "Employed" = pop_employed, "Rented Housing Unit" = pop_rented) %>% pivot_longer(-geometry, names_to = "variable") %>% st_as_sf() %>% st_transform(4326)
+chi_map + geom_sf(data = tract_demo_data, aes(geometry = geometry, fill = value), inherit.aes = FALSE, alpha = 0.7, color = NA) + facet_wrap("variable") + scale_fill_gradientn(colors = color_pal(5, "continuous"), labels = percent) + theme_map(base_family = "Pragati Narrow", base_size = 18) + labs(fill = "Percent of Tract\nPopulation")
+```
